@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # -------------------------------------------------
 # 페이지 설정 (항상 첫 Streamlit 명령어여야 함)
@@ -9,9 +9,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="🌦️ 날씨 대시보드", page_icon="🌦️", layout="wide")
 
 # -------------------------------------------------
-# Open-Meteo (API 키 불필요) 사용으로 전면 교체
-#  - 지오코딩: https://geocoding-api.open-meteo.com
-#  - 예보:     https://api.open-meteo.com
+# Open-Meteo (API 키 불필요)
 # -------------------------------------------------
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -44,7 +42,6 @@ def fetch_forecast(lat: float, lon: float, days: int = 7, tz: str = "auto"):
         "latitude": lat,
         "longitude": lon,
         "timezone": tz,
-        # 현재값
         "current": ",".join([
             "temperature_2m",
             "apparent_temperature",
@@ -52,16 +49,6 @@ def fetch_forecast(lat: float, lon: float, days: int = 7, tz: str = "auto"):
             "wind_speed_10m",
             "weather_code"
         ]),
-        # 시간별
-        "hourly": ",".join([
-            "temperature_2m",
-            "apparent_temperature",
-            "relative_humidity_2m",
-            "precipitation_probability",
-            "precipitation",
-            "wind_speed_10m"
-        ]),
-        # 일별
         "daily": ",".join([
             "weather_code",
             "temperature_2m_max",
@@ -96,7 +83,6 @@ if st.button("날씨 조회", type="primary"):
             st.error("도시를 찾을 수 없습니다. 다른 이름으로 시도해 주세요.")
             st.stop()
 
-        # 여러 후보 중 선택할 수 있게
         options = {f"{c['name']}, {c.get('country_code','')} (lat {c['latitude']:.2f}, lon {c['longitude']:.2f})": c for c in candidates}
         selected_label = st.selectbox("검색된 위치 선택", list(options.keys()))
         selected = options[selected_label]
@@ -116,35 +102,6 @@ if st.button("날씨 조회", type="primary"):
         c3.metric("습도", f"{current.get('relative_humidity_2m', '—')} %")
         c4.metric("풍속", f"{current.get('wind_speed_10m', '—')} m/s")
         st.info(f"현재 상태: {desc}")
-
-        # 시간별 데이터프레임
-        hourly = data.get("hourly", {})
-        if hourly:
-            df_h = pd.DataFrame(hourly)
-            df_h["time"] = pd.to_datetime(df_h["time"])  # 로컬 타임존 기준
-            now = df_h["time"].min()  # API가 이미 로컬 타임존으로 반환
-            until = now + timedelta(hours=24)
-            df_next24 = df_h[(df_h["time"] >= now) & (df_h["time"] <= until)]
-
-            st.subheader("다음 24시간 시계열")
-            # 24시간 기온
-            fig1, ax1 = plt.subplots()
-            ax1.plot(df_next24["time"], df_next24["temperature_2m"], marker="o")
-            ax1.set_title("시간별 기온 (다음 24시간)")
-            ax1.set_xlabel("시간")
-            ax1.set_ylabel("°C")
-            ax1.grid(True, linestyle=":", linewidth=0.5)
-            st.pyplot(fig1, use_container_width=True)
-
-            # 강수확률
-            if "precipitation_probability" in df_next24:
-                fig2, ax2 = plt.subplots()
-                ax2.plot(df_next24["time"], df_next24["precipitation_probability"], marker="o")
-                ax2.set_title("시간별 강수확률 (다음 24시간)")
-                ax2.set_xlabel("시간")
-                ax2.set_ylabel("%")
-                ax2.grid(True, linestyle=":", linewidth=0.5)
-                st.pyplot(fig2, use_container_width=True)
 
         # 일별 데이터프레임
         daily = data.get("daily", {})
