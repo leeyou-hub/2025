@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import datetime
-import matplotlib.pyplot as plt
 
 # ---------------------
 # 설정
