@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+import matplotlib.pyplot as plt
 
 # -------------------------------------------------
-# 페이지 설정 (항상 첫 Streamlit 명령어여야 함)
+# 페이지 설정
 # -------------------------------------------------
 st.set_page_config(page_title="🌦️ 날씨 대시보드", page_icon="🌦️", layout="wide")
 
@@ -42,6 +42,7 @@ def fetch_forecast(lat: float, lon: float, days: int = 7, tz: str = "auto"):
         "latitude": lat,
         "longitude": lon,
         "timezone": tz,
+        # 현재값
         "current": ",".join([
             "temperature_2m",
             "apparent_temperature",
@@ -49,15 +50,18 @@ def fetch_forecast(lat: float, lon: float, days: int = 7, tz: str = "auto"):
             "wind_speed_10m",
             "weather_code"
         ]),
+        # 일별 (가장 호환성 좋은 변수만 선택)
         "daily": ",".join([
             "weather_code",
             "temperature_2m_max",
             "temperature_2m_min",
-            "precipitation_sum",
-            "precipitation_probability_max",
-            "wind_speed_10m_max"
+            "precipitation_sum"
         ]),
-        "forecast_days": days
+        "forecast_days": days,
+        "past_days": 0,
+        "temperature_unit": "celsius",
+        "wind_speed_unit": "ms",
+        "precipitation_unit": "mm",
     }
     r = requests.get(FORECAST_URL, params=params, timeout=15)
     r.raise_for_status()
@@ -67,7 +71,7 @@ def fetch_forecast(lat: float, lon: float, days: int = 7, tz: str = "auto"):
 # UI
 # -------------------------------------------------
 st.title("🌦️ 날씨 대시보드 (API 키 불필요)")
-st.caption("Open-Meteo 기반: 도시명 → 좌표 변환 후 현재 날씨 + 7일 예보 제공")
+st.caption("Open-Meteo 기반: 도시명 → 좌표 변환 후 현재 날씨 + 일별 예보")
 
 col_left, col_right = st.columns([2, 1])
 with col_left:
@@ -103,32 +107,51 @@ if st.button("날씨 조회", type="primary"):
         c4.metric("풍속", f"{current.get('wind_speed_10m', '—')} m/s")
         st.info(f"현재 상태: {desc}")
 
-        # 일별 데이터프레임
-        daily = data.get("daily", {})
-        if daily:
+        # 3) 일별 요약 (강건성 개선)
+        daily = data.get("daily")
+        if not daily:
+            st.warning("이 위치에 대한 일별 데이터가 제공되지 않았습니다. 모델 변경 또는 일수 조정을 시도해 보세요.")
+        else:
             df_d = pd.DataFrame(daily)
-            df_d["time"] = pd.to_datetime(df_d["time"]).dt.date
-            st.subheader("일별 요약")
+            # 필수 컬럼 확인
+            required = ["time", "temperature_2m_max", "temperature_2m_min"]
+            missing = [c for c in required if c not in df_d.columns]
+            if missing:
+                st.warning(f"일별 요약에 필요한 컬럼이 없습니다: {', '.join(missing)}")
+                st.dataframe(df_d)
+            else:
+                # 문자열로 처리하여 렌더링 문제 방지
+                df_d["date"] = pd.to_datetime(df_d["time"]).dt.strftime("%Y-%m-%d")
+                st.subheader("일별 요약")
 
-            # 최고/최저 기온
-            fig3, ax3 = plt.subplots()
-            ax3.plot(df_d["time"], df_d["temperature_2m_max"], marker="o", label="최고")
-            ax3.plot(df_d["time"], df_d["temperature_2m_min"], marker="o", label="최저")
-            ax3.set_title("일별 최고/최저 기온")
-            ax3.set_xlabel("날짜")
-            ax3.set_ylabel("°C")
-            ax3.legend()
-            ax3.grid(True, linestyle=":", linewidth=0.5)
-            st.pyplot(fig3, use_container_width=True)
+                # 최고/최저 기온
+                fig3, ax3 = plt.subplots()
+                ax3.plot(df_d["date"], df_d["temperature_2m_max"], marker="o", label="최고")
+                ax3.plot(df_d["date"], df_d["temperature_2m_min"], marker="o", label="최저")
+                ax3.set_title("일별 최고/최저 기온")
+                ax3.set_xlabel("날짜")
+                ax3.set_ylabel("°C")
+                ax3.legend()
+                ax3.grid(True, linestyle=":", linewidth=0.5)
+                st.pyplot(fig3, use_container_width=True)
 
-            # 일별 강수량 합계
-            if "precipitation_sum" in df_d:
-                fig4, ax4 = plt.subplots()
-                ax4.bar(df_d["time"].astype(str), df_d["precipitation_sum"])
-                ax4.set_title("일별 강수량 합계")
-                ax4.set_xlabel("날짜")
-                ax4.set_ylabel("mm")
-                st.pyplot(fig4, use_container_width=True)
+                # 강수량 합계(있을 때만)
+                if "precipitation_sum" in df_d.columns:
+                    fig4, ax4 = plt.subplots()
+                    ax4.bar(df_d["date"], df_d["precipitation_sum"])
+                    ax4.set_title("일별 강수량 합계")
+                    ax4.set_xlabel("날짜")
+                    ax4.set_ylabel("mm")
+                    st.pyplot(fig4, use_container_width=True)
+
+                # 표로도 제공
+                show_cols = [c for c in ["date", "temperature_2m_max", "temperature_2m_min", "precipitation_sum"] if c in df_d.columns]
+                st.dataframe(df_d[show_cols].rename(columns={
+                    "date": "날짜",
+                    "temperature_2m_max": "최고(°C)",
+                    "temperature_2m_min": "최저(°C)",
+                    "precipitation_sum": "강수량(mm)"
+                }))
 
         st.success("데이터 갱신 완료 ✅ (Open-Meteo)")
 
