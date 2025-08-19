@@ -165,3 +165,28 @@ if st.button("날씨 조회", type="primary"):
         st.error("요청이 시간 초과되었습니다. 네트워크 상태를 확인해 주세요.")
     except Exception as e:
         st.error(f"예상치 못한 오류: {e}")
+
+# 최고/최저 기온
+fig3, ax3 = plt.subplots()
+ax3.plot(df_d["date"], df_d["temperature_2m_max"], marker="o", label="최고")
+ax3.plot(df_d["date"], df_d["temperature_2m_min"], marker="o", label="최저")
+ax3.set_title("일별 최고/최저 기온")
+ax3.set_xlabel("날짜")
+ax3.set_ylabel("°C")
+ax3.legend()
+ax3.grid(True, linestyle=":", linewidth=0.5)
+plt.xticks(rotation=45, fontsize=8)  # ← 여기 추가
+ax3.tick_params(axis='x', labelsize=8)  # ← 여기 추가
+st.pyplot(fig3, use_container_width=True)
+
+# 강수량 합계
+if "precipitation_sum" in df_d.columns:
+    fig4, ax4 = plt.subplots()
+    ax4.bar(df_d["date"], df_d["precipitation_sum"])
+    ax4.set_title("일별 강수량 합계")
+    ax4.set_xlabel("날짜")
+    ax4.set_ylabel("mm")
+    plt.xticks(rotation=45, fontsize=8)  # ← 여기 추가
+    ax4.tick_params(axis='x', labelsize=8)  # ← 여기 추가
+    st.pyplot(fig4, use_container_width=True)
+
