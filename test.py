@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import datetime
 
 # ---------------------
 # 설정
@@ -15,13 +14,19 @@ def get_weather(city):
     params = {
         "q": city,
         "appid": API_KEY,
-        "units": "metric",
-        "lang": "kr"
+        "units": "metric",  # 섭씨
+        "lang": "kr"         # 한국어 설명
     }
-    response = requests.get(BASE_URL, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
+    try:
+        response = requests.get(BASE_URL, params=params, timeout=5)
+        data = response.json()
+        if response.status_code == 200:
+            return data
+        else:
+            st.error(f"API 요청 실패: {data.get('message', '알 수 없는 오류')}")
+            return None
+    except Exception as e:
+        st.error(f"에러 발생: {e}")
         return None
 
 # ---------------------
@@ -47,10 +52,9 @@ if st.button("날씨 조회"):
         labels = ["기온", "체감온도"]
 
         fig, ax = plt.subplots()
-        ax.bar(labels, temps)
+        ax.bar(labels, temps, color=["skyblue", "orange"])
         ax.set_ylabel("°C")
         ax.set_title("기온 비교")
         st.pyplot(fig)
     else:
-        st.error("날씨 데이터를 가져올 수 없습니다. 도시 이름을 확인하세요.")
-
+        st.error("날씨 데이터를 가져올 수 없습니다. 도시 이름과 API 키를 확인하세요.")
