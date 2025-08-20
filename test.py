@@ -107,24 +107,22 @@ if st.button("날씨 조회", type="primary"):
         c4.metric("풍속", f"{current.get('wind_speed_10m', '—')} m/s")
         st.info(f"현재 상태: {desc}")
 
-        # 3) 일별 요약 (강건성 개선)
+        # 3) 일별 요약
         daily = data.get("daily")
         if not daily:
             st.warning("이 위치에 대한 일별 데이터가 제공되지 않았습니다. 모델 변경 또는 일수 조정을 시도해 보세요.")
         else:
             df_d = pd.DataFrame(daily)
-            # 필수 컬럼 확인
             required = ["time", "temperature_2m_max", "temperature_2m_min"]
             missing = [c for c in required if c not in df_d.columns]
             if missing:
                 st.warning(f"일별 요약에 필요한 컬럼이 없습니다: {', '.join(missing)}")
                 st.dataframe(df_d)
             else:
-                # 문자열로 처리하여 렌더링 문제 방지
                 df_d["date"] = pd.to_datetime(df_d["time"]).dt.strftime("%Y-%m-%d")
                 st.subheader("일별 요약")
 
-                # 최고/최저 기온
+                # 최고/최저 기온 그래프
                 fig3, ax3 = plt.subplots()
                 ax3.plot(df_d["date"], df_d["temperature_2m_max"], marker="o", label="최고")
                 ax3.plot(df_d["date"], df_d["temperature_2m_min"], marker="o", label="최저")
@@ -133,18 +131,22 @@ if st.button("날씨 조회", type="primary"):
                 ax3.set_ylabel("°C")
                 ax3.legend()
                 ax3.grid(True, linestyle=":", linewidth=0.5)
+                plt.xticks(rotation=45, fontsize=8)   # ← 날짜 겹치지 않게 수정
+                ax3.tick_params(axis='x', labelsize=8)
                 st.pyplot(fig3, use_container_width=True)
 
-                # 강수량 합계(있을 때만)
+                # 강수량 그래프
                 if "precipitation_sum" in df_d.columns:
                     fig4, ax4 = plt.subplots()
                     ax4.bar(df_d["date"], df_d["precipitation_sum"])
                     ax4.set_title("일별 강수량 합계")
                     ax4.set_xlabel("날짜")
                     ax4.set_ylabel("mm")
+                    plt.xticks(rotation=45, fontsize=8)
+                    ax4.tick_params(axis='x', labelsize=8)
                     st.pyplot(fig4, use_container_width=True)
 
-                # 표로도 제공
+                # 표
                 show_cols = [c for c in ["date", "temperature_2m_max", "temperature_2m_min", "precipitation_sum"] if c in df_d.columns]
                 st.dataframe(df_d[show_cols].rename(columns={
                     "date": "날짜",
@@ -156,10 +158,14 @@ if st.button("날씨 조회", type="primary"):
         st.success("데이터 갱신 완료 ✅ (Open-Meteo)")
 
     except requests.HTTPError as http_err:
-        try:
-            detail = http_err.response.json()
-        except Exception:
-            detail = http_err.response.text if hasattr(http_err, 'response') and http_err.response is not None else str(http_err)
+        resp = getattr(http_err, "response", None)
+        if resp is not None:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+        else:
+            detail = str(http_err)
         st.error(f"HTTP 오류: {detail}")
     except requests.Timeout:
         st.error("요청이 시간 초과되었습니다. 네트워크 상태를 확인해 주세요.")
